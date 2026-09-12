@@ -37,8 +37,27 @@ public class VehicleDetailService {
             vehicleDetailsResponseDTO.setVehicleNumber(vehicles.getVehicleNumber());
             vehicleDetailsResponseDTO.setDriverName(vehicles.getDriverName());
 
-
             return vehicleDetailsResponseDTO;
         }).collect(Collectors.toList());
+    }
+
+    public List<VehicleDetailsResponseDTO> getNrmlUservehicleList() {
+
+        List <Long> ids = List.of(16L , 17L, 18L, 19L, 20L);
+
+        List <VehicleDetails> vehicleDetails =vehicleDetailsRepo.findAllById(ids);
+
+      return vehicleDetails.stream().map(vehicle->{
+
+            VehicleDetailsResponseDTO vehicleDTO = new VehicleDetailsResponseDTO();
+
+
+            vehicleDTO.setId(vehicle.getId());
+            vehicleDTO.setDriverName(vehicle.getDriverName());
+            vehicleDTO.setVehicleNumber(vehicle.getVehicleNumber());
+
+            return vehicleDTO;
+
+        } ).collect(Collectors.toList());
     }
 }

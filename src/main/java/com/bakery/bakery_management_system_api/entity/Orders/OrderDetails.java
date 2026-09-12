@@ -1,7 +1,7 @@
     package com.bakery.bakery_management_system_api.entity.Orders;
 
 
-    import com.bakery.bakery_management_system_api.entity.DriverDetails;
+    import com.bakery.bakery_management_system_api.entity.Users;
     import com.bakery.bakery_management_system_api.entity.VehicleDetails;
     import com.bakery.bakery_management_system_api.enums.OrderStatus;
     import jakarta.persistence.*;
@@ -34,10 +34,14 @@
         @JoinColumn(name = "vehicle_id")
         private VehicleDetails vehicle;
 
-        @Column(name = "morning_total", nullable = false)
+        @ManyToOne
+        @JoinColumn(name = "id")
+        private Users users;
+
+        @Column(name = "morning_total", nullable = true)
         private BigDecimal morningTotal;
 
-        @Column(name = "evening_total", nullable = false)
+        @Column(name = "evening_total", nullable = true)
         private BigDecimal eveningTotal;
 
         @Column(name = "grand_total", nullable = false)

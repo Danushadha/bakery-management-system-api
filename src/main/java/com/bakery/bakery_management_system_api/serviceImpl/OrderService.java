@@ -8,13 +8,15 @@ import com.bakery.bakery_management_system_api.dto.response.orderResponseDTOS.Or
 import com.bakery.bakery_management_system_api.entity.ItemDetails;
 import com.bakery.bakery_management_system_api.entity.Orders.OrderDetails;
 import com.bakery.bakery_management_system_api.entity.Orders.OrderedItems;
+import com.bakery.bakery_management_system_api.entity.Users;
 import com.bakery.bakery_management_system_api.entity.VehicleDetails;
 import com.bakery.bakery_management_system_api.enums.OrderStatus;
 import com.bakery.bakery_management_system_api.enums.Shift;
 import com.bakery.bakery_management_system_api.repositary.*;
 import jakarta.transaction.Transactional;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
-import org.w3c.dom.stylesheets.LinkStyle;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -32,16 +34,33 @@ public class OrderService {
     private final ItemDetailsRepo itemDetailsRepo;
     private final OrderItemsRepo orderItemsRepo;
     private final VehicleDetailsRepo vehicleDetailsRepo;
+    private final UserRepo userRepo;
 
-    public OrderService(OrderRepo orderRepo, ItemDetailsRepo itemDetailsRepo, OrderItemsRepo orderItemsRepo, VehicleDetailsRepo vehicleDetailsRepo) {
+    public OrderService(OrderRepo orderRepo, ItemDetailsRepo itemDetailsRepo, OrderItemsRepo orderItemsRepo, VehicleDetailsRepo vehicleDetailsRepo, UserRepo userRepo) {
         this.orderRepo = orderRepo;
         this.itemDetailsRepo = itemDetailsRepo;
         this.orderItemsRepo = orderItemsRepo;
         this.vehicleDetailsRepo = vehicleDetailsRepo;
+        this.userRepo = userRepo;
+    }
+
+    private Users getCurrentUser() {
+
+        Authentication authentication =
+                SecurityContextHolder.getContext().getAuthentication();
+
+        String username = authentication.getName();
+
+        return userRepo.findByUserName(username)
+                .orElseThrow(() ->
+                        new RuntimeException("Authenticated User Not found"));
     }
 
     @Transactional
     public OrdereResponseDto saveMorningOrder (OrderRequestDTO dto){
+
+        Users currentUser = getCurrentUser();
+
 
         OrderDetails  order;
 
@@ -57,6 +76,7 @@ public class OrderService {
             order.setEveningTotal(BigDecimal.ZERO);
             order.setGrandTotal(BigDecimal.ZERO);
             order.setStatus(OrderStatus.OPEN);
+            order.setUsers(currentUser);
 
             order = orderRepo.save(order);
             String orderNo = generateOrderNo(order.getId());
@@ -71,14 +91,16 @@ public class OrderService {
             // which deletes whole items for any no of edits
             // and re-create whole items which sends back from response dto
 
-            order = orderRepo.findById(dto.getOrderId())
-                    .orElseThrow(()->new RuntimeException("order not found"));
+            order = orderRepo
+                    .findByIdAndUsers(dto.getOrderId(), currentUser)
+                    .orElseThrow(() ->
+                            new RuntimeException("Order not found or access denied"));
 
             orderItemsRepo.deleteByOrderDetailsAndShift(order , Shift.MORNING);
         }
 
         BigDecimal morningTotal = BigDecimal.ZERO;
-        BigDecimal eveningTotal = BigDecimal.ZERO;
+
 
        //setting values to items
 
@@ -106,11 +128,8 @@ public class OrderService {
         }
         order.setMorningTotal(morningTotal);
 
-        // if this vehicle not arrived evening grand total will be morning total
-        //setting evenng total to zero because its require not be null
-        order.setEveningTotal(eveningTotal);
 
-        order.setGrandTotal(order.getMorningTotal().add(eveningTotal));
+        order.setGrandTotal(order.getMorningTotal().add(order.getEveningTotal()));
         order = orderRepo.save(order);
 
 
@@ -120,6 +139,10 @@ public class OrderService {
         responseDtodto.setOrderNo(order.getOrderNo());
         responseDtodto.setOrderDate(order.getCreatedAt());
         responseDtodto.setVehicle(order.getVehicle());
+        responseDtodto.setStatus(order.getStatus());
+        responseDtodto.setMorningTotal(order.getMorningTotal());
+        responseDtodto.setGrandtotal(order.getGrandTotal());
+
 
        List<OrderedItems> orderedItemsList = orderItemsRepo.findByOrderDetailsAndShift(order, Shift.MORNING);
 
@@ -143,14 +166,21 @@ public class OrderService {
 
     }
 
+    @Transactional
     public  OrdereResponseDto saveEveningOrder (OrderRequestDTO dto){
 
         // here find the respective morning order of vehicle
+
+
+
 
         OrderDetails order;
 
         VehicleDetails vehicle = vehicleDetailsRepo.findById(dto.getVehicleId())
                 .orElseThrow(()->new RuntimeException("Vehicle not Found ..."));
+
+        Users currentUser = getCurrentUser();
+
 
         LocalDate today = LocalDate.now();
 
@@ -172,6 +202,7 @@ public class OrderService {
             order.setMorningTotal(BigDecimal.ZERO);
             order.setGrandTotal(BigDecimal.ZERO);
             order.setStatus(OrderStatus.OPEN);
+            order.setUsers(currentUser);
 
             order = orderRepo.save(order);
             String orderNo = generateOrderNo(order.getId());
@@ -180,6 +211,19 @@ public class OrderService {
             order = orderRepo.save(order);
 
         }
+
+        if (dto.getOrderId()!=null){
+
+            order = orderRepo
+                    .findByIdAndUsers(dto.getOrderId(), currentUser)
+                    .orElseThrow(() ->
+                            new RuntimeException("Order not found or access denied"));
+
+            orderItemsRepo.deleteByOrderDetailsAndShift(order , Shift.EVENING);
+
+        }
+
+
 
         BigDecimal eveningTotal = BigDecimal.ZERO;
 
@@ -209,7 +253,7 @@ public class OrderService {
         }
         order.setEveningTotal(eveningTotal);
 
-        order.setGrandTotal(order.getGrandTotal().add(eveningTotal));
+        order.setGrandTotal(order.getMorningTotal().add(eveningTotal));
         order= orderRepo.save(order);
 
 
@@ -220,6 +264,7 @@ public class OrderService {
         responseDtodto.setOrderNo(order.getOrderNo());
         responseDtodto.setOrderDate(order.getCreatedAt());
         responseDtodto.setVehicle(order.getVehicle());
+        responseDtodto.setStatus(order.getStatus());
 
         List<OrderedItems> orderedItemsList = orderItemsRepo.findByOrderDetailsAndShift(order, Shift.EVENING);
 
@@ -247,6 +292,8 @@ public class OrderService {
 // this methods call when user selects the vehicle
     public OrdereResponseDto getTodayOrder(Long vehicleId) {
 
+        Users currentUser = getCurrentUser();
+
         VehicleDetails vehicle = vehicleDetailsRepo.findById(vehicleId)
                 .orElseThrow(() -> new RuntimeException("Vehicle not found"));
 
@@ -254,10 +301,15 @@ public class OrderService {
 
         LocalDateTime start = today.atStartOfDay();
 
-        LocalDateTime end = today.atTime(23, 59, 59);
+        LocalDateTime end = today.plusDays(1).atStartOfDay();
 
         OrderDetails order = orderRepo
-                .findByVehicleAndCreatedAtBetween(vehicle, start, end)
+                .findByVehicleAndUsersAndCreatedAtBetween(
+                        vehicle,
+                        currentUser,
+                        start,
+                        end
+                )
                 .orElse(null);
 
         if (order == null) {
@@ -270,6 +322,10 @@ public class OrderService {
         response.setOrderNo(order.getOrderNo());
         response.setOrderDate(order.getCreatedAt());
         response.setVehicle(order.getVehicle());
+        response.setStatus(order.getStatus());
+        response.setMorningTotal(order.getMorningTotal());
+        response.setEveningTotal(order.getEveningTotal());
+        response.setGrandtotal(order.getGrandTotal());
 
         List<OrderedItems> morningItems =
                 orderItemsRepo.findByOrderDetailsAndShift(
@@ -283,7 +339,7 @@ public class OrderService {
                         Shift.EVENING
                 );
 
-        List<OrderedItemsResponseDto> dtoList = new ArrayList<>();
+        List<OrderedItemsResponseDto> mdtoList = new ArrayList<>();
 
         for (OrderedItems item : morningItems) {
 
@@ -296,10 +352,28 @@ public class OrderService {
             dto.setLineTotal(item.getLineTotal());
             dto.setShift(item.getShift());
 
-            dtoList.add(dto);
+            mdtoList.add(dto);
         }
 
-        response.setMorningItemsResponseDto(dtoList);
+        response.setMorningItemsResponseDto(mdtoList);
+
+        List<OrderedItemsResponseDto> edtoList = new ArrayList<>();
+
+        for (OrderedItems item : eveningItems) {
+
+            OrderedItemsResponseDto dto = new OrderedItemsResponseDto();
+            dto.setItemId(item.getItemDetails().getId());
+            dto.setOrderId(order.getId());
+            dto.setItemName(item.getItemDetails().getItemName());
+            dto.setQty(item.getQty());
+            dto.setUnitPrice(item.getUnitPrice());
+            dto.setLineTotal(item.getLineTotal());
+            dto.setShift(item.getShift());
+
+            edtoList.add(dto);
+        }
+
+        response.setEveningItemsResponseDto(edtoList);
 
         return response;
     }
@@ -321,4 +395,262 @@ public class OrderService {
     }
 
 
+    public OrdereResponseDto getCloseandPrintInvoice(Long orderId) {
+
+        OrderDetails order = orderRepo.findById(orderId)
+                .orElseThrow(()->new RuntimeException("order not found"));
+
+        order.setStatus(OrderStatus.CLOSE);
+        orderRepo.save(order);
+
+
+
+        OrdereResponseDto response = new OrdereResponseDto();
+
+        response.setId(order.getId());
+        response.setOrderNo(order.getOrderNo());
+        response.setOrderDate(order.getCreatedAt());
+        response.setVehicle(order.getVehicle());
+        response.setStatus(order.getStatus());
+        response.setMorningTotal(order.getMorningTotal());
+        response.setEveningTotal(order.getEveningTotal());
+        response.setGrandtotal(order.getGrandTotal());
+
+        List<OrderedItems> morningItems =
+                orderItemsRepo.findByOrderDetailsAndShift(
+                        order,
+                        Shift.MORNING
+                );
+
+        List<OrderedItems> eveningItems =
+                orderItemsRepo.findByOrderDetailsAndShift(
+                        order,
+                        Shift.EVENING
+                );
+
+        List<OrderedItemsResponseDto> mdtoList = new ArrayList<>();
+
+        for (OrderedItems item : morningItems) {
+
+            OrderedItemsResponseDto dto = new OrderedItemsResponseDto();
+            dto.setItemId(item.getItemDetails().getId());
+            dto.setOrderId(order.getId());
+            dto.setItemName(item.getItemDetails().getItemName());
+            dto.setQty(item.getQty());
+            dto.setUnitPrice(item.getUnitPrice());
+            dto.setLineTotal(item.getLineTotal());
+            dto.setShift(item.getShift());
+
+            mdtoList.add(dto);
+        }
+
+        response.setMorningItemsResponseDto(mdtoList);
+
+        List<OrderedItemsResponseDto> edtoList = new ArrayList<>();
+
+        for (OrderedItems item : eveningItems) {
+
+            OrderedItemsResponseDto dto = new OrderedItemsResponseDto();
+            dto.setItemId(item.getItemDetails().getId());
+            dto.setOrderId(order.getId());
+            dto.setItemName(item.getItemDetails().getItemName());
+            dto.setQty(item.getQty());
+            dto.setUnitPrice(item.getUnitPrice());
+            dto.setLineTotal(item.getLineTotal());
+            dto.setShift(item.getShift());
+
+            edtoList.add(dto);
+        }
+
+        response.setEveningItemsResponseDto(edtoList);
+
+        return response;
+    }
+
+
+
+
+// for view orders page
+    public List<OrdereResponseDto> getOrdersByDate(
+            LocalDate startDate,
+            LocalDate endDate
+    ) {
+
+        LocalDateTime start = startDate.atStartOfDay();
+
+        LocalDateTime end = endDate.plusDays(1).atStartOfDay();
+
+        List<OrderDetails> orders =
+                orderRepo.findByCreatedAtBetween(start, end);
+
+        List<OrdereResponseDto> responseList = new ArrayList<>();
+
+        for (OrderDetails order : orders) {
+
+            OrdereResponseDto response = new OrdereResponseDto();
+
+            response.setId(order.getId());
+            response.setOrderNo(order.getOrderNo());
+            response.setOrderDate(order.getCreatedAt());
+            response.setVehicle(order.getVehicle());
+            response.setStatus(order.getStatus());
+            response.setMorningTotal(order.getMorningTotal());
+            response.setEveningTotal(order.getEveningTotal());
+            response.setGrandtotal(order.getGrandTotal());
+
+            // Morning items
+            List<OrderedItems> morningItems =
+                    orderItemsRepo.findByOrderDetailsAndShift(
+                            order,
+                            Shift.MORNING
+                    );
+
+            List<OrderedItemsResponseDto> morningDtoList =
+                    new ArrayList<>();
+
+            for (OrderedItems item : morningItems) {
+
+                OrderedItemsResponseDto dto =
+                        new OrderedItemsResponseDto();
+
+                dto.setItemId(item.getItemDetails().getId());
+                dto.setOrderId(order.getId());
+                dto.setItemName(item.getItemDetails().getItemName());
+                dto.setQty(item.getQty());
+                dto.setUnitPrice(item.getUnitPrice());
+                dto.setLineTotal(item.getLineTotal());
+                dto.setShift(item.getShift());
+
+                morningDtoList.add(dto);
+            }
+
+            response.setMorningItemsResponseDto(morningDtoList);
+
+
+            // Evening items
+            List<OrderedItems> eveningItems =
+                    orderItemsRepo.findByOrderDetailsAndShift(
+                            order,
+                            Shift.EVENING
+                    );
+
+            List<OrderedItemsResponseDto> eveningDtoList =
+                    new ArrayList<>();
+
+            for (OrderedItems item : eveningItems) {
+
+                OrderedItemsResponseDto dto =
+                        new OrderedItemsResponseDto();
+
+                dto.setItemId(item.getItemDetails().getId());
+                dto.setOrderId(order.getId());
+                dto.setItemName(item.getItemDetails().getItemName());
+                dto.setQty(item.getQty());
+                dto.setUnitPrice(item.getUnitPrice());
+                dto.setLineTotal(item.getLineTotal());
+                dto.setShift(item.getShift());
+
+                eveningDtoList.add(dto);
+            }
+
+            response.setEveningItemsResponseDto(eveningDtoList);
+
+            responseList.add(response);
+        }
+
+        return responseList;
+    }
+
+    public List<OrdereResponseDto> getOrdersByDateForNormalUser(
+            LocalDate startDate, LocalDate endDate) {
+
+
+        LocalDateTime start = startDate.atStartOfDay();
+        LocalDateTime end = endDate.plusDays(1).atStartOfDay();
+
+        List <Long> vehicleIds = List.of(16L, 17L, 18L, 19L, 20L );
+
+        List<OrderDetails> orders =
+                orderRepo.findByCreatedAtGreaterThanEqualAndCreatedAtLessThanAndVehicle_IdIn(
+                        start,
+                        end,
+                        vehicleIds
+                );
+        List<OrdereResponseDto> responseList = new ArrayList<>();
+
+        for (OrderDetails order : orders) {
+
+            OrdereResponseDto response = new OrdereResponseDto();
+
+            response.setId(order.getId());
+            response.setOrderNo(order.getOrderNo());
+            response.setOrderDate(order.getCreatedAt());
+            response.setVehicle(order.getVehicle());
+            response.setStatus(order.getStatus());
+            response.setMorningTotal(order.getMorningTotal());
+            response.setEveningTotal(order.getEveningTotal());
+            response.setGrandtotal(order.getGrandTotal());
+
+            // Morning items
+            List<OrderedItems> morningItems =
+                    orderItemsRepo.findByOrderDetailsAndShift(
+                            order,
+                            Shift.MORNING
+                    );
+
+            List<OrderedItemsResponseDto> morningDtoList =
+                    new ArrayList<>();
+
+            for (OrderedItems item : morningItems) {
+
+                OrderedItemsResponseDto dto =
+                        new OrderedItemsResponseDto();
+
+                dto.setItemId(item.getItemDetails().getId());
+                dto.setOrderId(order.getId());
+                dto.setItemName(item.getItemDetails().getItemName());
+                dto.setQty(item.getQty());
+                dto.setUnitPrice(item.getUnitPrice());
+                dto.setLineTotal(item.getLineTotal());
+                dto.setShift(item.getShift());
+
+                morningDtoList.add(dto);
+            }
+
+            response.setMorningItemsResponseDto(morningDtoList);
+
+
+            // Evening items
+            List<OrderedItems> eveningItems =
+                    orderItemsRepo.findByOrderDetailsAndShift(
+                            order,
+                            Shift.EVENING
+                    );
+
+            List<OrderedItemsResponseDto> eveningDtoList =
+                    new ArrayList<>();
+
+            for (OrderedItems item : eveningItems) {
+
+                OrderedItemsResponseDto dto =
+                        new OrderedItemsResponseDto();
+
+                dto.setItemId(item.getItemDetails().getId());
+                dto.setOrderId(order.getId());
+                dto.setItemName(item.getItemDetails().getItemName());
+                dto.setQty(item.getQty());
+                dto.setUnitPrice(item.getUnitPrice());
+                dto.setLineTotal(item.getLineTotal());
+                dto.setShift(item.getShift());
+
+                eveningDtoList.add(dto);
+            }
+
+            response.setEveningItemsResponseDto(eveningDtoList);
+
+            responseList.add(response);
+        }
+
+        return responseList;
+    }
 }

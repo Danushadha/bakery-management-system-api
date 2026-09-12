@@ -7,7 +7,9 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 public class BakeryManagementSystemApiApplication {
 
 	public static void main(String[] args) {
+
 		SpringApplication.run(BakeryManagementSystemApiApplication.class, args);
+
 	}
 
 }

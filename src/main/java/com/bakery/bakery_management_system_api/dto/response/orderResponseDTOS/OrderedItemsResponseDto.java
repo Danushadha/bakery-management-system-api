@@ -12,6 +12,7 @@ import java.math.BigDecimal;
 @Getter
 @Setter
 public class OrderedItemsResponseDto {
+
     private Long itemId;
     private Long orderId;
     private String itemName;

@@ -2,6 +2,7 @@ package com.bakery.bakery_management_system_api.dto.response.orderResponseDTOS;
 
 import com.bakery.bakery_management_system_api.dto.response.VehicleDetailsResponseDTO;
 import com.bakery.bakery_management_system_api.entity.VehicleDetails;
+import com.bakery.bakery_management_system_api.enums.OrderStatus;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -21,6 +22,10 @@ public class OrdereResponseDto {
     private String orderNo;
     private LocalDateTime orderDate;
     private VehicleDetails vehicle;
+    private OrderStatus status;
+    private BigDecimal morningTotal;
+    private BigDecimal eveningTotal;
+    private BigDecimal grandtotal;
 
     private List <OrderedItemsResponseDto> morningItemsResponseDto;
     private List <OrderedItemsResponseDto> eveningItemsResponseDto;

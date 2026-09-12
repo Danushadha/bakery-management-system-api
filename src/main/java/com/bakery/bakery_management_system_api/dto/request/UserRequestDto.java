@@ -6,12 +6,14 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-@Getter
-@Setter
 @NoArgsConstructor
 @AllArgsConstructor
-public class DriverRequestDTO {
-    private String name;
-    private String nic;
-    private String contactNo;
+@Getter
+@Setter
+public class UserRequestDto {
+
+        private String userName;
+        private String password;
+        private String role;
+
 }
