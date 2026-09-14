@@ -45,6 +45,7 @@ public class SecurityConfig {
                 session.sessionCreationPolicy(SessionCreationPolicy.STATELESS));
 
         https.authorizeHttpRequests(request->request
+                        .requestMatchers(org.springframework.http.HttpMethod.OPTIONS, "/**").permitAll()
 
                 .requestMatchers("/api/authController/login").permitAll()
                         .requestMatchers("/api/authController/saveUser").hasRole("ADMIN")
