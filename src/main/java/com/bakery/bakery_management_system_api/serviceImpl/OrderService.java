@@ -77,6 +77,7 @@ public class OrderService {
             order.setGrandTotal(BigDecimal.ZERO);
             order.setStatus(OrderStatus.OPEN);
             order.setUsers(currentUser);
+            order.setCreatedAt(dto.getOrderDate().atStartOfDay());
 
             order = orderRepo.save(order);
             String orderNo = generateOrderNo(order.getId());
@@ -182,7 +183,7 @@ public class OrderService {
         Users currentUser = getCurrentUser();
 
 
-        LocalDate today = LocalDate.now();
+        LocalDate today = dto.getOrderDate();
 
         LocalDateTime start = today.atStartOfDay();
 
@@ -203,6 +204,7 @@ public class OrderService {
             order.setGrandTotal(BigDecimal.ZERO);
             order.setStatus(OrderStatus.OPEN);
             order.setUsers(currentUser);
+            order.setCreatedAt(dto.getOrderDate().atStartOfDay());
 
             order = orderRepo.save(order);
             String orderNo = generateOrderNo(order.getId());

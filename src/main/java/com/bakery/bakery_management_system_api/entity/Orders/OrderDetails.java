@@ -51,8 +51,8 @@
         @Column(name = "status", nullable = false)
         private OrderStatus status;
 
-        @CreationTimestamp
-        @Column (name = "createdAt" , updatable = false, length = 100)
+
+        @Column (name = "createdAt" , nullable = false, length = 100)
         private LocalDateTime createdAt;
 
 
