@@ -27,10 +27,25 @@ public class ItemDetailsController {
 
         itemDetailsService.saveItem(dto);
     }
+    @PostMapping ("/update")
+    public void editItem (@RequestBody ItemDetailsRequestDTO dto){
+        System.out.println("to update item "+dto.getItemName());
+        itemDetailsService.updateItem(dto);
+
+    }
+
+
+    @PostMapping ("/disable")
+    public void delItem (@RequestBody ItemDetailsRequestDTO dto){
+        System.out.println(" item to Disable "+ dto.getItemName());
+        itemDetailsService.disableItem(dto);
+
+    }
+
 
     @GetMapping
     public List <ItemDetailsResponseDTO> getItemList(){
 
-        return  itemDetailsService.getAllItems();
+        return  itemDetailsService.getAllActiveItems();
     }
 }

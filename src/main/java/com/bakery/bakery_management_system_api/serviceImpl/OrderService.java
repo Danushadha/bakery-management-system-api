@@ -10,6 +10,7 @@ import com.bakery.bakery_management_system_api.entity.Orders.OrderDetails;
 import com.bakery.bakery_management_system_api.entity.Orders.OrderedItems;
 import com.bakery.bakery_management_system_api.entity.Users;
 import com.bakery.bakery_management_system_api.entity.VehicleDetails;
+import com.bakery.bakery_management_system_api.enums.ItemStatus;
 import com.bakery.bakery_management_system_api.enums.OrderStatus;
 import com.bakery.bakery_management_system_api.enums.Shift;
 import com.bakery.bakery_management_system_api.repositary.*;
@@ -107,8 +108,8 @@ public class OrderService {
 
         for (OrderedItemsRequestDto itemReqDto :dto.getOrderedItemsRequestDtoList()){
 
-            ItemDetails item = itemDetailsRepo.findById(itemReqDto.getItemId())
-                    .orElseThrow(()->new RuntimeException("item Not found"));
+            ItemDetails item = itemDetailsRepo.findByIdAndItemStatus(itemReqDto.getItemId() , ItemStatus.ACTIVE)
+                    .orElseThrow(()->new RuntimeException("item Not found or Inactive"));
 
             OrderedItems orderedItems = new OrderedItems();
             orderedItems.setOrderDetails(order);
@@ -233,8 +234,8 @@ public class OrderService {
 
         for (OrderedItemsRequestDto itemReqDto :dto.getOrderedItemsRequestDtoList()){
 
-            ItemDetails item = itemDetailsRepo.findById(itemReqDto.getItemId())
-                    .orElseThrow(()->new RuntimeException("item Not found"));
+            ItemDetails item = itemDetailsRepo.findByIdAndItemStatus(itemReqDto.getItemId() , ItemStatus.ACTIVE)
+                    .orElseThrow(()->new RuntimeException("item Not found or Inactive "));
 
             OrderedItems orderedItems = new OrderedItems();
             orderedItems.setOrderDetails(order);
@@ -512,8 +513,7 @@ public class OrderService {
 
             for (OrderedItems item : morningItems) {
 
-                OrderedItemsResponseDto dto =
-                        new OrderedItemsResponseDto();
+                OrderedItemsResponseDto dto = new OrderedItemsResponseDto();
 
                 dto.setItemId(item.getItemDetails().getId());
                 dto.setOrderId(order.getId());

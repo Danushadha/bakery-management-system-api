@@ -3,6 +3,7 @@ package com.bakery.bakery_management_system_api.serviceImpl;
 import com.bakery.bakery_management_system_api.dto.request.ItemDetailsRequestDTO;
 import com.bakery.bakery_management_system_api.dto.response.ItemDetailsResponseDTO;
 import com.bakery.bakery_management_system_api.entity.ItemDetails;
+import com.bakery.bakery_management_system_api.enums.ItemStatus;
 import com.bakery.bakery_management_system_api.repositary.ItemDetailsRepo;
 import org.springframework.stereotype.Service;
 
@@ -22,14 +23,15 @@ public class ItemDetailsService {
         ItemDetails itemDetails = new ItemDetails();
         itemDetails.setItemName(dto.getItemName());
         itemDetails.setPrice(dto.getPrice());
+        itemDetails.setItemStatus(ItemStatus.ACTIVE);
 
         itemDetailsRepo.save(itemDetails);
 
     }
 
-    public List <ItemDetailsResponseDTO> getAllItems(){
+    public List <ItemDetailsResponseDTO> getAllActiveItems(){
 
-        return itemDetailsRepo.findAll().stream().map(item->{
+        return itemDetailsRepo.findByItemStatus(ItemStatus.ACTIVE).stream().map(item->{
 
             ItemDetailsResponseDTO itemDetailsResponseDTO = new ItemDetailsResponseDTO();
             itemDetailsResponseDTO.setId(item.getId());
@@ -41,4 +43,23 @@ public class ItemDetailsService {
     }
 
 
+    public void updateItem(ItemDetailsRequestDTO dto) {
+
+        ItemDetails itemDetails = itemDetailsRepo.findByIdAndItemStatus(dto.getId(), ItemStatus.ACTIVE)
+                .orElseThrow(() -> new RuntimeException("Item Not found"));
+        itemDetails.setItemName(dto.getItemName());
+        itemDetails.setPrice(dto.getPrice());
+        itemDetails.setItemStatus(ItemStatus.ACTIVE);
+
+        itemDetailsRepo.save(itemDetails);
+    }
+
+    public void disableItem(ItemDetailsRequestDTO dto) {
+
+        ItemDetails itemDetails = itemDetailsRepo.findByIdAndItemStatus(dto.getId(), ItemStatus.ACTIVE)
+                .orElseThrow(() -> new RuntimeException("Item Not found"));
+        itemDetails.setItemStatus(ItemStatus.INACTIVE);
+
+        itemDetailsRepo.save(itemDetails);
+    }
 }

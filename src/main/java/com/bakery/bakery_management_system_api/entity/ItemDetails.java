@@ -1,6 +1,7 @@
 package com.bakery.bakery_management_system_api.entity;
 
 
+import com.bakery.bakery_management_system_api.enums.ItemStatus;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -27,6 +28,10 @@ public class ItemDetails {
 
     @Column(name = "price" , nullable = false , length = 25)
     private BigDecimal price;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "item_status" , nullable = false , length = 10)
+    private ItemStatus itemStatus;
 
     @CreationTimestamp
     private LocalDateTime createdTime;

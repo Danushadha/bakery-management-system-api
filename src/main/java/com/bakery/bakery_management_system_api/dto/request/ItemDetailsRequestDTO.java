@@ -13,6 +13,7 @@ import java.math.BigDecimal;
 @Getter
 @Setter
 public class ItemDetailsRequestDTO {
+    private Long id;
     private String itemName;
     private BigDecimal price;
 }
