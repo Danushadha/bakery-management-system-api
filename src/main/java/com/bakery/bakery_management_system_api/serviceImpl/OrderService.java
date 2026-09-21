@@ -81,7 +81,7 @@ public class OrderService {
             order.setCreatedAt(dto.getOrderDate().atStartOfDay());
 
             order = orderRepo.save(order);
-            String orderNo = generateOrderNo(order.getId());
+            String orderNo = generateOrderNo(order.getId() , dto.getOrderDate());
 
             order.setOrderNo(orderNo);
             order =  orderRepo.save(order);
@@ -208,7 +208,7 @@ public class OrderService {
             order.setCreatedAt(dto.getOrderDate().atStartOfDay());
 
             order = orderRepo.save(order);
-            String orderNo = generateOrderNo(order.getId());
+            String orderNo = generateOrderNo(order.getId() , dto.getOrderDate());
 
             order.setOrderNo(orderNo);
             order = orderRepo.save(order);
@@ -385,10 +385,10 @@ public class OrderService {
 
 
 
-    public String generateOrderNo(Long id){
+    public String generateOrderNo(Long id , LocalDate orderDate){
 
         int year = Year.now().getValue();
-        String month = LocalDate.now().getMonth().
+        String month = orderDate.getMonth().
                 getDisplayName(TextStyle.SHORT, Locale.ENGLISH).toUpperCase();
 
         String generatedNo = "NB" + year + "/" + month + "-" + String.format("%04d",id);
