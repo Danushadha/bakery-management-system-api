@@ -2,9 +2,12 @@ package com.bakery.bakery_management_system_api.api;
 
 
 import ch.qos.logback.core.net.SyslogOutputStream;
+
 import com.bakery.bakery_management_system_api.dto.request.OrderRequestDTO;
 import com.bakery.bakery_management_system_api.dto.response.orderResponseDTOS.OrdereResponseDto;
 import com.bakery.bakery_management_system_api.serviceImpl.OrderService;
+import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.security.core.Authentication;
@@ -25,21 +28,39 @@ public class OrderControler {
     }
 
     @PostMapping("/morning")
-    public OrdereResponseDto saveOrderMorning(@RequestBody OrderRequestDTO dto){
+    public OrdereResponseDto saveOrderMorning(@RequestBody OrderRequestDTO dto , HttpServletRequest request){
 
-       return orderService.saveMorningOrder(dto);
+        String ipAddress = request.getHeader("X-Real-IP");
+
+        if (ipAddress == null || ipAddress.isBlank()) {
+            ipAddress = request.getRemoteAddr();
+        }
+        
+        System.out.println("ip addres is"+ipAddress);
+
+       return orderService.saveMorningOrder(dto , ipAddress);
     }
     @PostMapping("/evening")
-    public OrdereResponseDto saveOrderEvening(@RequestBody OrderRequestDTO dto){
+    public OrdereResponseDto saveOrderEvening(@RequestBody OrderRequestDTO dto,  HttpServletRequest request){
 
-        return orderService.saveEveningOrder(dto);
+        String ipAddress = request.getHeader("X-Real-IP");
+
+        if (ipAddress == null || ipAddress.isBlank()) {
+            ipAddress = request.getRemoteAddr();
+        }
+        return orderService.saveEveningOrder(dto , ipAddress);
     }
 
 
-    @GetMapping("/today/{vehicleId}")
-    public ResponseEntity<OrdereResponseDto> getTodayOrder(@PathVariable Long vehicleId) {
+    @GetMapping("/getOrderByVehicleAndDate")
+    public ResponseEntity<OrdereResponseDto> getOrderByVehicleAndDate(
+            @RequestParam Long vehicleId,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate orderDate)
 
-        OrdereResponseDto response = orderService.getTodayOrder(vehicleId);
+    {
+        System.out.println("vehicleId" + vehicleId );
+        System.out.println("order date " + orderDate );
+        OrdereResponseDto response = orderService.getOrderByVehicleAndDate(vehicleId, orderDate);
 
         return ResponseEntity.ok(response);
 

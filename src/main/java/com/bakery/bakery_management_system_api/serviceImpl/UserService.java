@@ -36,7 +36,7 @@ public class UserService {
 
         users.setUserName(userRequestDto.getUserName());
         users.setPassword(passwordEncoder.encode(userRequestDto.getPassword()));
-        users.setRole("USERS");
+        users.setRole("USER");
         userRepo.save(users);
     }
 

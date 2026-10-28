@@ -7,6 +7,7 @@ import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.springframework.http.converter.json.GsonBuilderUtils;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -25,9 +26,11 @@ public class OrdereResponseDto {
     private OrderStatus status;
     private BigDecimal morningTotal;
     private BigDecimal eveningTotal;
-    private BigDecimal grandtotal;
+    private BigDecimal grandTotal;
+    private BigDecimal vehicleRent;
 
     private List <OrderedItemsResponseDto> morningItemsResponseDto;
     private List <OrderedItemsResponseDto> eveningItemsResponseDto;
+
 
 }

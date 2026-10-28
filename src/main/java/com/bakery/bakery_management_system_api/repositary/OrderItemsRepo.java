@@ -11,5 +11,5 @@ public interface OrderItemsRepo extends JpaRepository<OrderedItems, Long> {
 
     void deleteByOrderDetailsAndShift(OrderDetails orderDetails , Shift shift);
     List <OrderedItems> findByOrderDetailsAndShift(OrderDetails orderDetails , Shift shift);
-
+    boolean existsByOrderDetailsAndShift(OrderDetails order, Shift shift);
 }

@@ -48,4 +48,11 @@ public class VehicleDetailsController {
             return vehicleDetailService.getNrmlUservehicleList ();
 
     }
+
+    public void editVehicle (@RequestBody VehicleDetailsRequestDTO dto){
+
+        vehicleDetailService.updateVehicle (dto);
+
+
+    }
 }

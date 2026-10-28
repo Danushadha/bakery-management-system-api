@@ -34,6 +34,9 @@
         @JoinColumn(name = "vehicle_id")
         private VehicleDetails vehicle;
 
+        @Column (name = "vehicle_rent" , nullable = true, length = 50)
+        private BigDecimal vehicleRent;
+
         @ManyToOne
         @JoinColumn(name = "id")
         private Users users;
@@ -54,6 +57,14 @@
 
         @Column (name = "createdAt" , nullable = false, length = 100)
         private LocalDateTime createdAt;
+
+        @CreationTimestamp
+        @Column (name = "act_saved_at" , nullable = true, length = 100, updatable = false)
+        private LocalDateTime actSavedAt;
+
+
+        @Column (name = "ipAddress" , nullable = true, length = 45)
+        private String ipAddress;
 
 
     }

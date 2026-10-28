@@ -5,6 +5,8 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.math.BigDecimal;
+
 @AllArgsConstructor
 @NoArgsConstructor
 @Getter
@@ -13,4 +15,5 @@ public class VehicleDetailsResponseDTO {
     private Long id;
     private String vehicleNumber;
     private String driverName;
+    private BigDecimal rent;
 }

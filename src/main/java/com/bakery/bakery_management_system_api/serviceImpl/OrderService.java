@@ -58,8 +58,8 @@ public class OrderService {
     }
 
     @Transactional
-    public OrdereResponseDto saveMorningOrder (OrderRequestDTO dto){
-
+    public OrdereResponseDto saveMorningOrder (OrderRequestDTO dto, String ipAddress){
+        System.out.println("ip address in save" + ipAddress);
         Users currentUser = getCurrentUser();
 
 
@@ -80,8 +80,11 @@ public class OrderService {
             order.setUsers(currentUser);
             order.setCreatedAt(dto.getOrderDate().atStartOfDay());
 
+            order.setIpAddress(ipAddress);
+
             order = orderRepo.save(order);
             String orderNo = generateOrderNo(order.getId() , dto.getOrderDate());
+
 
             order.setOrderNo(orderNo);
             order =  orderRepo.save(order);
@@ -130,8 +133,12 @@ public class OrderService {
         }
         order.setMorningTotal(morningTotal);
 
+        updateVehicleRent(order);
 
-        order.setGrandTotal(order.getMorningTotal().add(order.getEveningTotal()));
+
+        order.setGrandTotal(order.getMorningTotal()
+                .add(order.getEveningTotal())
+                .add(order.getVehicleRent()));
         order = orderRepo.save(order);
 
 
@@ -141,9 +148,10 @@ public class OrderService {
         responseDtodto.setOrderNo(order.getOrderNo());
         responseDtodto.setOrderDate(order.getCreatedAt());
         responseDtodto.setVehicle(order.getVehicle());
+        responseDtodto.setVehicleRent(order.getVehicleRent());
         responseDtodto.setStatus(order.getStatus());
         responseDtodto.setMorningTotal(order.getMorningTotal());
-        responseDtodto.setGrandtotal(order.getGrandTotal());
+        responseDtodto.setGrandTotal(order.getGrandTotal());
 
 
        List<OrderedItems> orderedItemsList = orderItemsRepo.findByOrderDetailsAndShift(order, Shift.MORNING);
@@ -168,14 +176,11 @@ public class OrderService {
 
     }
 
+
     @Transactional
-    public  OrdereResponseDto saveEveningOrder (OrderRequestDTO dto){
+    public  OrdereResponseDto saveEveningOrder (OrderRequestDTO dto , String ipAddress){
 
         // here find the respective morning order of vehicle
-
-
-
-
         OrderDetails order;
 
         VehicleDetails vehicle = vehicleDetailsRepo.findById(dto.getVehicleId())
@@ -206,6 +211,7 @@ public class OrderService {
             order.setStatus(OrderStatus.OPEN);
             order.setUsers(currentUser);
             order.setCreatedAt(dto.getOrderDate().atStartOfDay());
+            order.setIpAddress(ipAddress);
 
             order = orderRepo.save(order);
             String orderNo = generateOrderNo(order.getId() , dto.getOrderDate());
@@ -254,9 +260,14 @@ public class OrderService {
 
             orderItemsRepo.save(orderedItems);
         }
-        order.setEveningTotal(eveningTotal);
 
-        order.setGrandTotal(order.getMorningTotal().add(eveningTotal));
+        order.setEveningTotal(eveningTotal);
+        updateVehicleRent(order);
+
+        order.setGrandTotal(order.getMorningTotal()
+                .add(order.getEveningTotal())
+                .add(order.getVehicleRent()));
+
         order= orderRepo.save(order);
 
 
@@ -267,7 +278,10 @@ public class OrderService {
         responseDtodto.setOrderNo(order.getOrderNo());
         responseDtodto.setOrderDate(order.getCreatedAt());
         responseDtodto.setVehicle(order.getVehicle());
+        responseDtodto.setVehicleRent(order.getVehicleRent());
         responseDtodto.setStatus(order.getStatus());
+        responseDtodto.setGrandTotal(order.getGrandTotal());
+        responseDtodto.setEveningTotal(order.getEveningTotal());
 
         List<OrderedItems> orderedItemsList = orderItemsRepo.findByOrderDetailsAndShift(order, Shift.EVENING);
 
@@ -292,19 +306,45 @@ public class OrderService {
 
     }
 
+
+    private void updateVehicleRent(OrderDetails order) {
+
+        BigDecimal fullRent = order.getVehicle().getRent();
+
+        if (fullRent == null || fullRent.compareTo(BigDecimal.ZERO) <= 0) {
+            order.setVehicleRent(BigDecimal.ZERO);
+            return;
+        }
+
+        boolean hasMorning = orderItemsRepo.existsByOrderDetailsAndShift(order ,Shift.MORNING);
+
+        boolean hasEvening = orderItemsRepo.existsByOrderDetailsAndShift(order ,Shift.EVENING);
+
+        if (hasMorning && hasEvening ){
+
+            order.setVehicleRent(fullRent);
+        }
+
+        else {
+
+            order.setVehicleRent(fullRent.divide(BigDecimal.valueOf(2)));
+        }
+
+    }
+
 // this methods call when user selects the vehicle
-    public OrdereResponseDto getTodayOrder(Long vehicleId) {
+    public OrdereResponseDto getOrderByVehicleAndDate(Long vehicleId, LocalDate orderDate) {
 
         Users currentUser = getCurrentUser();
 
         VehicleDetails vehicle = vehicleDetailsRepo.findById(vehicleId)
                 .orElseThrow(() -> new RuntimeException("Vehicle not found"));
 
-        LocalDate today = LocalDate.now();
 
-        LocalDateTime start = today.atStartOfDay();
 
-        LocalDateTime end = today.plusDays(1).atStartOfDay();
+        LocalDateTime start = orderDate.atStartOfDay();
+
+        LocalDateTime end = orderDate.plusDays(1).atStartOfDay();
 
         OrderDetails order = orderRepo
                 .findByVehicleAndUsersAndCreatedAtBetween(
@@ -325,16 +365,19 @@ public class OrderService {
         response.setOrderNo(order.getOrderNo());
         response.setOrderDate(order.getCreatedAt());
         response.setVehicle(order.getVehicle());
+        response.setVehicleRent(order.getVehicleRent());
         response.setStatus(order.getStatus());
         response.setMorningTotal(order.getMorningTotal());
         response.setEveningTotal(order.getEveningTotal());
-        response.setGrandtotal(order.getGrandTotal());
+        response.setVehicleRent(order.getVehicleRent());
+        response.setGrandTotal(order.getGrandTotal());
 
         List<OrderedItems> morningItems =
                 orderItemsRepo.findByOrderDetailsAndShift(
                         order,
                         Shift.MORNING
                 );
+
 
         List<OrderedItems> eveningItems =
                 orderItemsRepo.findByOrderDetailsAndShift(
@@ -417,7 +460,8 @@ public class OrderService {
         response.setStatus(order.getStatus());
         response.setMorningTotal(order.getMorningTotal());
         response.setEveningTotal(order.getEveningTotal());
-        response.setGrandtotal(order.getGrandTotal());
+        response.setVehicleRent(order.getVehicleRent());
+        response.setGrandTotal(order.getGrandTotal());
 
         List<OrderedItems> morningItems =
                 orderItemsRepo.findByOrderDetailsAndShift(
@@ -499,7 +543,7 @@ public class OrderService {
             response.setStatus(order.getStatus());
             response.setMorningTotal(order.getMorningTotal());
             response.setEveningTotal(order.getEveningTotal());
-            response.setGrandtotal(order.getGrandTotal());
+            response.setGrandTotal(order.getGrandTotal());
 
             // Morning items
             List<OrderedItems> morningItems =
@@ -591,7 +635,7 @@ public class OrderService {
             response.setStatus(order.getStatus());
             response.setMorningTotal(order.getMorningTotal());
             response.setEveningTotal(order.getEveningTotal());
-            response.setGrandtotal(order.getGrandTotal());
+            response.setGrandTotal(order.getGrandTotal());
 
             // Morning items
             List<OrderedItems> morningItems =

@@ -6,8 +6,10 @@ import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.hibernate.annotations.CreationTimestamp;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 
 @Entity
 @Getter
@@ -28,4 +30,13 @@ public class VehicleDetails {
 
         @Column(name = "driver_name" , nullable = false , length = 25)
         private String driverName;
+
+        @Column(name = "rent" , nullable = true , length = 25)
+        private BigDecimal rent;
+
+        @CreationTimestamp
+        @Column (name = "createdAt" , nullable = true, length = 100, updatable = false)
+        private LocalDateTime createdAt;
+
+
 }
