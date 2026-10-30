@@ -57,199 +57,356 @@ public class OrderService {
                         new RuntimeException("Authenticated User Not found"));
     }
 
+    private OrderDetails findOrderforVehicleAndDate(VehicleDetails vehicle , LocalDate orderDate , Users currentUser){
+
+        LocalDateTime start = orderDate.atStartOfDay();
+        LocalDateTime end = orderDate.plusDays(1)
+                .atStartOfDay()
+                .minusNanos(1);
+
+        return orderRepo
+                .findByVehicleAndUsersAndCreatedAtBetween(
+                        vehicle,
+                        currentUser,
+                        start,
+                        end
+                )
+                .orElse(null);
+    }
+
     @Transactional
-    public OrdereResponseDto saveMorningOrder (OrderRequestDTO dto, String ipAddress){
-        System.out.println("ip address in save" + ipAddress);
+    public OrdereResponseDto saveMorningOrder(OrderRequestDTO dto, String ipAddress) {
+
+        // 1. Find the selected vehicle
+        VehicleDetails vehicle = vehicleDetailsRepo.findById(dto.getVehicleId())
+                .orElseThrow(() ->
+                        new RuntimeException("Vehicle not found"));
+
+        // 2. Get the currently authenticated user
         Users currentUser = getCurrentUser();
 
+        OrderDetails order;
 
-        OrderDetails  order;
+        // 3. Check whether the frontend supplied an existing order ID
+        if (dto.getOrderId() != null) {
 
-        VehicleDetails vehicle = vehicleDetailsRepo.findById(dto.getVehicleId())
-                .orElseThrow(()->new RuntimeException("Vehicle not Found ..."));
-
-        if (dto.getOrderId() == null){
-
-            order =new OrderDetails();
-
-            order.setVehicle(vehicle);
-            order.setMorningTotal(BigDecimal.ZERO);
-            order.setEveningTotal(BigDecimal.ZERO);
-            order.setGrandTotal(BigDecimal.ZERO);
-            order.setStatus(OrderStatus.OPEN);
-            order.setUsers(currentUser);
-            order.setCreatedAt(dto.getOrderDate().atStartOfDay());
-
-            order.setIpAddress(ipAddress);
-
-            order = orderRepo.save(order);
-            String orderNo = generateOrderNo(order.getId() , dto.getOrderDate());
-
-
-            order.setOrderNo(orderNo);
-            order =  orderRepo.save(order);
-        }
-        else {
-
-            // this piece runs when there is order id
-            // (when user edits and save for second time)
-            // which deletes whole items for any no of edits
-            // and re-create whole items which sends back from response dto
-
-            order = orderRepo
-                    .findByIdAndUsers(dto.getOrderId(), currentUser)
+            // Find the order belonging to the current user
+            order = orderRepo.findByIdAndUsers(
+                            dto.getOrderId(), currentUser)
                     .orElseThrow(() ->
-                            new RuntimeException("Order not found or access denied"));
+                            new RuntimeException(
+                                    "Order not found for the current user"));
 
-            orderItemsRepo.deleteByOrderDetailsAndShift(order , Shift.MORNING);
+            // Make sure the order belongs to the selected vehicle and date
+            if (!order.getVehicle().getId().equals(vehicle.getId())
+                    || !order.getCreatedAt().toLocalDate()
+                    .equals(dto.getOrderDate())) {
+
+                throw new RuntimeException(
+                        "The selected order does not match the vehicle and date");
+            }
+
+            // Do not allow changes to a closed order
+            if (order.getStatus() == OrderStatus.CLOSE) {
+                throw new RuntimeException(
+                        "This order is already closed");
+            }
+
+            // Remove the existing morning items before replacing them
+            orderItemsRepo.deleteByOrderDetailsAndShift(
+                    order, Shift.MORNING);
+
+        } else {
+
+            // 4. No order ID supplied: search for an order for this
+            // vehicle, current user, and selected date
+            order = findOrderforVehicleAndDate(
+                    vehicle, dto.getOrderDate(), currentUser);
+
+            if (order != null) {
+
+                // An existing closed order cannot be changed
+                if (order.getStatus() == OrderStatus.CLOSE) {
+                    throw new RuntimeException(
+                            "An order already exists for this date and is closed");
+                }
+
+                // Do not create a duplicate morning shift
+                boolean morningExists =
+                        orderItemsRepo.existsByOrderDetailsAndShift(
+                                order, Shift.MORNING);
+
+                if (morningExists) {
+                    throw new RuntimeException(
+                            "A morning order already exists for this vehicle and date");
+                }
+
+                // If this order contains only evening items,
+                // we can add the morning items to the same order.
+
+            } else {
+
+                // 5. No order exists: create a new order
+                order = new OrderDetails();
+
+                order.setVehicle(vehicle);
+                order.setUsers(currentUser);
+
+                order.setMorningTotal(BigDecimal.ZERO);
+                order.setEveningTotal(BigDecimal.ZERO);
+                order.setGrandTotal(BigDecimal.ZERO);
+                order.setVehicleRent(BigDecimal.ZERO);
+
+                order.setStatus(OrderStatus.OPEN);
+                order.setCreatedAt(dto.getOrderDate().atStartOfDay());
+                order.setIpAddress(ipAddress);
+
+                // Save first to generate the database ID
+                order = orderRepo.save(order);
+
+                // Generate the order number using the generated ID
+                String orderNo = generateOrderNo(
+                        order.getId(), dto.getOrderDate());
+
+                order.setOrderNo(orderNo);
+
+                order = orderRepo.save(order);
+            }
         }
 
+        // 6. Save morning items for BOTH new and existing orders
         BigDecimal morningTotal = BigDecimal.ZERO;
 
+        for (OrderedItemsRequestDto itemReqDto
+                : dto.getOrderedItemsRequestDtoList()) {
 
-       //setting values to items
+            // Only allow active items
+            ItemDetails item = itemDetailsRepo.findByIdAndItemStatus(
+                            itemReqDto.getItemId(), ItemStatus.ACTIVE)
+                    .orElseThrow(() ->
+                            new RuntimeException(
+                                    "Item not found or inactive"));
 
-        for (OrderedItemsRequestDto itemReqDto :dto.getOrderedItemsRequestDtoList()){
-
-            ItemDetails item = itemDetailsRepo.findByIdAndItemStatus(itemReqDto.getItemId() , ItemStatus.ACTIVE)
-                    .orElseThrow(()->new RuntimeException("item Not found or Inactive"));
+            // Validate quantity
+            if (itemReqDto.getQty() <= 0) {
+                throw new RuntimeException(
+                        "Item quantity must be greater than zero");
+            }
 
             OrderedItems orderedItems = new OrderedItems();
+
             orderedItems.setOrderDetails(order);
             orderedItems.setItemDetails(item);
             orderedItems.setQty(itemReqDto.getQty());
             orderedItems.setUnitPrice(item.getPrice());
             orderedItems.setShift(Shift.MORNING);
 
+            // Calculate line total
             BigDecimal lineTotal = item.getPrice()
                     .multiply(BigDecimal.valueOf(itemReqDto.getQty()));
 
             orderedItems.setLineTotal(lineTotal);
 
-            morningTotal=morningTotal.add(lineTotal);
-
+            morningTotal = morningTotal.add(lineTotal);
 
             orderItemsRepo.save(orderedItems);
         }
+
+        // 7. Update the morning total
         order.setMorningTotal(morningTotal);
 
+        // 8. Recalculate vehicle rent based on saved shifts
         updateVehicleRent(order);
 
+        // 9. Calculate the grand total
+        order.setGrandTotal(
+                order.getMorningTotal()
+                        .add(order.getEveningTotal() == null
+                                ? BigDecimal.ZERO
+                                : order.getEveningTotal())
+                        .add(order.getVehicleRent() == null
+                                ? BigDecimal.ZERO
+                                : order.getVehicleRent())
+        );
 
-        order.setGrandTotal(order.getMorningTotal()
-                .add(order.getEveningTotal())
-                .add(order.getVehicleRent()));
+        // Save the updated totals
         order = orderRepo.save(order);
 
+        // 10. Prepare the response DTO
+        OrdereResponseDto responseDto = new OrdereResponseDto();
 
-        //setting values back to response
-        OrdereResponseDto responseDtodto = new OrdereResponseDto();
-        responseDtodto.setId(order.getId());
-        responseDtodto.setOrderNo(order.getOrderNo());
-        responseDtodto.setOrderDate(order.getCreatedAt());
-        responseDtodto.setVehicle(order.getVehicle());
-        responseDtodto.setVehicleRent(order.getVehicleRent());
-        responseDtodto.setStatus(order.getStatus());
-        responseDtodto.setMorningTotal(order.getMorningTotal());
-        responseDtodto.setGrandTotal(order.getGrandTotal());
+        responseDto.setId(order.getId());
+        responseDto.setOrderNo(order.getOrderNo());
+        responseDto.setOrderDate(order.getCreatedAt());
+        responseDto.setVehicle(order.getVehicle());
+        responseDto.setVehicleRent(order.getVehicleRent());
+        responseDto.setStatus(order.getStatus());
+        responseDto.setMorningTotal(order.getMorningTotal());
+        responseDto.setGrandTotal(order.getGrandTotal());
 
+        // 11. Retrieve the saved morning items
+        List<OrderedItems> orderedItemsList =
+                orderItemsRepo.findByOrderDetailsAndShift(
+                        order, Shift.MORNING);
 
-       List<OrderedItems> orderedItemsList = orderItemsRepo.findByOrderDetailsAndShift(order, Shift.MORNING);
+        List<OrderedItemsResponseDto> orderedItemsResponseDtos =
+                new ArrayList<>();
 
-       List <OrderedItemsResponseDto> orderedItemsResponseDtos = new ArrayList<>();
+        for (OrderedItems items : orderedItemsList) {
 
-        for (OrderedItems items : orderedItemsList){
+            OrderedItemsResponseDto itemResponse =
+                    new OrderedItemsResponseDto();
 
-            OrderedItemsResponseDto responseDto = new OrderedItemsResponseDto();
-            responseDto.setItemId(items.getItemDetails().getId());
-            responseDto.setOrderId(items.getOrderDetails().getId());
-            responseDto.setItemName(items.getItemDetails().getItemName());
-            responseDto.setQty(items.getQty());
-            responseDto.setUnitPrice(items.getUnitPrice());
-            responseDto.setLineTotal(items.getLineTotal());
+            itemResponse.setItemId(items.getItemDetails().getId());
+            itemResponse.setOrderId(items.getOrderDetails().getId());
+            itemResponse.setItemName(items.getItemDetails().getItemName());
+            itemResponse.setQty(items.getQty());
+            itemResponse.setUnitPrice(items.getUnitPrice());
+            itemResponse.setLineTotal(items.getLineTotal());
 
-            orderedItemsResponseDtos.add(responseDto);
+            orderedItemsResponseDtos.add(itemResponse);
         }
-        responseDtodto.setMorningItemsResponseDto(orderedItemsResponseDtos);
 
-        return responseDtodto;
+        responseDto.setMorningItemsResponseDto(
+                orderedItemsResponseDtos);
 
+        return responseDto;
     }
 
-
     @Transactional
-    public  OrdereResponseDto saveEveningOrder (OrderRequestDTO dto , String ipAddress){
+    public OrdereResponseDto saveEveningOrder(
+            OrderRequestDTO dto,
+            String ipAddress) {
 
-        // here find the respective morning order of vehicle
-        OrderDetails order;
-
+        // 1. Find the selected vehicle
         VehicleDetails vehicle = vehicleDetailsRepo.findById(dto.getVehicleId())
-                .orElseThrow(()->new RuntimeException("Vehicle not Found ..."));
+                .orElseThrow(() ->
+                        new RuntimeException("Vehicle not found"));
 
+        // 2. Get the currently authenticated user
         Users currentUser = getCurrentUser();
 
+        OrderDetails order;
 
-        LocalDate today = dto.getOrderDate();
+        // 3. Check whether the frontend supplied an existing order ID
+        if (dto.getOrderId() != null) {
 
-        LocalDateTime start = today.atStartOfDay();
-
-        LocalDateTime end = today.atTime(23, 59, 59);
-
-        order = orderRepo
-                .findByVehicleAndCreatedAtBetween(vehicle, start, end)
-                .orElse(null);
-
-        // if no morning order of this vehicle it creates for evening
-        if (order==null){
-
-            order =new OrderDetails();
-
-            order.setVehicle(vehicle);
-            order.setEveningTotal(BigDecimal.ZERO);
-            order.setMorningTotal(BigDecimal.ZERO);
-            order.setGrandTotal(BigDecimal.ZERO);
-            order.setStatus(OrderStatus.OPEN);
-            order.setUsers(currentUser);
-            order.setCreatedAt(dto.getOrderDate().atStartOfDay());
-            order.setIpAddress(ipAddress);
-
-            order = orderRepo.save(order);
-            String orderNo = generateOrderNo(order.getId() , dto.getOrderDate());
-
-            order.setOrderNo(orderNo);
-            order = orderRepo.save(order);
-
-        }
-
-        if (dto.getOrderId()!=null){
-
-            order = orderRepo
-                    .findByIdAndUsers(dto.getOrderId(), currentUser)
+            // Find the order belonging to the current user
+            order = orderRepo.findByIdAndUsers(
+                            dto.getOrderId(), currentUser)
                     .orElseThrow(() ->
-                            new RuntimeException("Order not found or access denied"));
+                            new RuntimeException(
+                                    "Evening order not found or access denied"));
 
-            orderItemsRepo.deleteByOrderDetailsAndShift(order , Shift.EVENING);
+            // Validate vehicle and date
+            if (!order.getVehicle().getId().equals(vehicle.getId()) ||
+                    !order.getCreatedAt().toLocalDate()
+                            .equals(dto.getOrderDate())) {
 
+                throw new RuntimeException(
+                        "The order does not match the selected vehicle and date");
+            }
+
+            // Check whether the order is closed
+            if (order.getStatus() == OrderStatus.CLOSE) {
+                throw new RuntimeException(
+                        "This order is closed and cannot be edited");
+            }
+
+            // Delete previous evening items before replacing them
+            orderItemsRepo.deleteByOrderDetailsAndShift(
+                    order, Shift.EVENING);
+
+        } else {
+
+            // 4. No order ID supplied:
+            // Search for an existing order for this vehicle, user and date
+
+            order = findOrderforVehicleAndDate(
+                    vehicle, dto.getOrderDate(), currentUser);
+
+            if (order != null) {
+
+                // Reject closed orders
+                if (order.getStatus() == OrderStatus.CLOSE) {
+                    throw new RuntimeException(
+                            "An order already exists for this date and is closed");
+                }
+
+                // Check whether evening items already exist
+                boolean eveningExists =
+                        orderItemsRepo.existsByOrderDetailsAndShift(
+                                order, Shift.EVENING);
+
+                if (eveningExists) {
+                    throw new RuntimeException(
+                            "An evening order already exists for this vehicle and date");
+                }
+
+                // IMPORTANT:
+                // Reuse the existing order.
+                // This could be a morning-only order.
+
+            } else {
+
+                // 5. No existing order: create a new evening-only order
+
+                order = new OrderDetails();
+
+                order.setVehicle(vehicle);
+                order.setUsers(currentUser);
+
+                order.setMorningTotal(BigDecimal.ZERO);
+                order.setEveningTotal(BigDecimal.ZERO);
+                order.setGrandTotal(BigDecimal.ZERO);
+                order.setVehicleRent(BigDecimal.ZERO);
+
+                order.setStatus(OrderStatus.OPEN);
+                order.setCreatedAt(dto.getOrderDate().atStartOfDay());
+                order.setIpAddress(ipAddress);
+
+                // Save first to generate the database ID
+                order = orderRepo.save(order);
+
+                // Generate the order number
+                String orderNo = generateOrderNo(
+                        order.getId(), dto.getOrderDate());
+
+                order.setOrderNo(orderNo);
+
+                order = orderRepo.save(order);
+            }
         }
 
-
+        // 6. Save evening items for BOTH new and existing orders
 
         BigDecimal eveningTotal = BigDecimal.ZERO;
 
-        //setting values to items
+        for (OrderedItemsRequestDto itemReqDto
+                : dto.getOrderedItemsRequestDtoList()) {
 
-        for (OrderedItemsRequestDto itemReqDto :dto.getOrderedItemsRequestDtoList()){
+            // Find active item
+            ItemDetails item = itemDetailsRepo.findByIdAndItemStatus(
+                            itemReqDto.getItemId(), ItemStatus.ACTIVE)
+                    .orElseThrow(() ->
+                            new RuntimeException(
+                                    "Item not found or inactive"));
 
-            ItemDetails item = itemDetailsRepo.findByIdAndItemStatus(itemReqDto.getItemId() , ItemStatus.ACTIVE)
-                    .orElseThrow(()->new RuntimeException("item Not found or Inactive "));
+            // Validate quantity
+            if (itemReqDto.getQty() <= 0) {
+                throw new RuntimeException(
+                        "Item quantity must be greater than zero");
+            }
 
             OrderedItems orderedItems = new OrderedItems();
+
             orderedItems.setOrderDetails(order);
             orderedItems.setItemDetails(item);
             orderedItems.setQty(itemReqDto.getQty());
             orderedItems.setUnitPrice(item.getPrice());
             orderedItems.setShift(Shift.EVENING);
 
+            // Calculate line total
             BigDecimal lineTotal = item.getPrice()
                     .multiply(BigDecimal.valueOf(itemReqDto.getQty()));
 
@@ -257,53 +414,68 @@ public class OrderService {
 
             eveningTotal = eveningTotal.add(lineTotal);
 
-
             orderItemsRepo.save(orderedItems);
         }
 
+        // 7. Update evening total
         order.setEveningTotal(eveningTotal);
+
+        // 8. Recalculate vehicle rent
         updateVehicleRent(order);
 
-        order.setGrandTotal(order.getMorningTotal()
-                .add(order.getEveningTotal())
-                .add(order.getVehicleRent()));
+        // 9. Calculate grand total
+        order.setGrandTotal(
+                (order.getMorningTotal() == null
+                        ? BigDecimal.ZERO
+                        : order.getMorningTotal())
+                        .add(order.getEveningTotal())
+                        .add(order.getVehicleRent() == null
+                                ? BigDecimal.ZERO
+                                : order.getVehicleRent())
+        );
 
-        order= orderRepo.save(order);
+        // Save updated order
+        order = orderRepo.save(order);
 
+        // 10. Prepare response DTO
+        OrdereResponseDto responseDto = new OrdereResponseDto();
 
-        // setting evening values to response
+        responseDto.setId(order.getId());
+        responseDto.setOrderNo(order.getOrderNo());
+        responseDto.setOrderDate(order.getCreatedAt());
+        responseDto.setVehicle(order.getVehicle());
+        responseDto.setVehicleRent(order.getVehicleRent());
+        responseDto.setStatus(order.getStatus());
+        responseDto.setGrandTotal(order.getGrandTotal());
+        responseDto.setEveningTotal(order.getEveningTotal());
 
-        OrdereResponseDto responseDtodto = new OrdereResponseDto();
-        responseDtodto.setId(order.getId());
-        responseDtodto.setOrderNo(order.getOrderNo());
-        responseDtodto.setOrderDate(order.getCreatedAt());
-        responseDtodto.setVehicle(order.getVehicle());
-        responseDtodto.setVehicleRent(order.getVehicleRent());
-        responseDtodto.setStatus(order.getStatus());
-        responseDtodto.setGrandTotal(order.getGrandTotal());
-        responseDtodto.setEveningTotal(order.getEveningTotal());
+        // 11. Retrieve saved evening items
+        List<OrderedItems> orderedItemsList =
+                orderItemsRepo.findByOrderDetailsAndShift(
+                        order, Shift.EVENING);
 
-        List<OrderedItems> orderedItemsList = orderItemsRepo.findByOrderDetailsAndShift(order, Shift.EVENING);
+        List<OrderedItemsResponseDto> orderedItemsResponseDtos =
+                new ArrayList<>();
 
-        List <OrderedItemsResponseDto> orderedItemsResponseDtos = new ArrayList<>();
+        for (OrderedItems items : orderedItemsList) {
 
-        for (OrderedItems items : orderedItemsList){
+            OrderedItemsResponseDto itemResponse =
+                    new OrderedItemsResponseDto();
 
-            OrderedItemsResponseDto responseDto = new OrderedItemsResponseDto();
-            responseDto.setItemId(items.getItemDetails().getId());
-            responseDto.setOrderId(items.getOrderDetails().getId());
-            responseDto.setItemName(items.getItemDetails().getItemName());
-            responseDto.setQty(items.getQty());
-            responseDto.setUnitPrice(items.getUnitPrice());
-            responseDto.setLineTotal(items.getLineTotal());
+            itemResponse.setItemId(items.getItemDetails().getId());
+            itemResponse.setOrderId(items.getOrderDetails().getId());
+            itemResponse.setItemName(items.getItemDetails().getItemName());
+            itemResponse.setQty(items.getQty());
+            itemResponse.setUnitPrice(items.getUnitPrice());
+            itemResponse.setLineTotal(items.getLineTotal());
 
-            orderedItemsResponseDtos.add(responseDto);
+            orderedItemsResponseDtos.add(itemResponse);
         }
-        responseDtodto.setEveningItemsResponseDto(orderedItemsResponseDtos);
 
-        return responseDtodto;
+        responseDto.setEveningItemsResponseDto(
+                orderedItemsResponseDtos);
 
-
+        return responseDto;
     }
 
 
