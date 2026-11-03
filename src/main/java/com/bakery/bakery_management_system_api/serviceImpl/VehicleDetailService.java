@@ -68,5 +68,25 @@ public class VehicleDetailService {
 
     public void updateVehicle(VehicleDetailsRequestDTO dto) {
 
+
+        VehicleDetails vehicle = vehicleDetailsRepo.findById(dto.getId())
+                .orElseThrow(()->new RuntimeException("no Vehicle found to update for this item "));
+
+        if (!vehicle.getId().equals(dto.getId())){
+            throw new RuntimeException("Selected vehicle does not match with the Database vehicle");
+        }
+
+        else {
+
+            vehicle.setVehicleNumber(dto.getVehicleNumber());
+            vehicle.setDriverName(dto.getDriverName());
+            vehicle.setRent(dto.getRent());
+
+            VehicleDetails updatevhcl= vehicleDetailsRepo.save(vehicle);
+
+
+            System.out.println("updated vehicle driver" + updatevhcl.getDriverName());
+
+        }
     }
 }

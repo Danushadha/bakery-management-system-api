@@ -712,6 +712,7 @@ public class OrderService {
             response.setOrderNo(order.getOrderNo());
             response.setOrderDate(order.getCreatedAt());
             response.setVehicle(order.getVehicle());
+            response.setVehicleRent(order.getVehicleRent());
             response.setStatus(order.getStatus());
             response.setMorningTotal(order.getMorningTotal());
             response.setEveningTotal(order.getEveningTotal());
@@ -804,6 +805,7 @@ public class OrderService {
             response.setOrderNo(order.getOrderNo());
             response.setOrderDate(order.getCreatedAt());
             response.setVehicle(order.getVehicle());
+            response.setVehicleRent(order.getVehicleRent());
             response.setStatus(order.getStatus());
             response.setMorningTotal(order.getMorningTotal());
             response.setEveningTotal(order.getEveningTotal());

@@ -2,6 +2,7 @@ package com.bakery.bakery_management_system_api.api;
 
 import com.bakery.bakery_management_system_api.dto.request.VehicleDetailsRequestDTO;
 import com.bakery.bakery_management_system_api.dto.response.VehicleDetailsResponseDTO;
+import com.bakery.bakery_management_system_api.entity.VehicleDetails;
 import com.bakery.bakery_management_system_api.serviceImpl.VehicleDetailService;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContext;
@@ -23,7 +24,7 @@ public class VehicleDetailsController {
         this.vehicleDetailService = vehicleDetailService;
     }
 
-    @PostMapping
+    @PostMapping("/save")
     public void saveVehicle (@RequestBody VehicleDetailsRequestDTO dto){
 
         vehicleDetailService.saveVehicle(dto);
@@ -48,10 +49,10 @@ public class VehicleDetailsController {
             return vehicleDetailService.getNrmlUservehicleList ();
 
     }
-
+    @PostMapping("/update")
     public void editVehicle (@RequestBody VehicleDetailsRequestDTO dto){
 
-        vehicleDetailService.updateVehicle (dto);
+      vehicleDetailService.updateVehicle (dto);
 
 
     }
