@@ -40,4 +40,12 @@ public interface OrderRepo extends JpaRepository<OrderDetails, Long> {
             LocalDateTime end,
             List<Long> vehicleIds
     );
+
+    Optional<OrderDetails>
+    findFirstByVehicleAndUsersAndCreatedAtGreaterThanEqualAndCreatedAtLessThan(
+            VehicleDetails vehicle,
+            Users users,
+            LocalDateTime start,
+            LocalDateTime end
+    );
 }

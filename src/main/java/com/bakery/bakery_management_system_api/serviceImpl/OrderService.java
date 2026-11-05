@@ -60,12 +60,10 @@ public class OrderService {
     private OrderDetails findOrderforVehicleAndDate(VehicleDetails vehicle , LocalDate orderDate , Users currentUser){
 
         LocalDateTime start = orderDate.atStartOfDay();
-        LocalDateTime end = orderDate.plusDays(1)
-                .atStartOfDay()
-                .minusNanos(1);
+        LocalDateTime end = orderDate.plusDays(1).atStartOfDay();
 
         return orderRepo
-                .findByVehicleAndUsersAndCreatedAtBetween(
+                .findFirstByVehicleAndUsersAndCreatedAtGreaterThanEqualAndCreatedAtLessThan(
                         vehicle,
                         currentUser,
                         start,
@@ -516,16 +514,29 @@ public class OrderService {
 
         LocalDateTime start = orderDate.atStartOfDay();
 
-        LocalDateTime end = orderDate.plusDays(1).atStartOfDay();
+        LocalDateTime end = orderDate.atTime(23,59,59);
+
+
+        System.out.println("========== DATE DEBUG ==========");
+        System.out.println("Received orderDate: " + orderDate);
+        System.out.println("Start: " + start);
+        System.out.println("End: " + end);
+        System.out.println("Vehicle ID: " + vehicleId);
 
         OrderDetails order = orderRepo
-                .findByVehicleAndUsersAndCreatedAtBetween(
+                .findFirstByVehicleAndUsersAndCreatedAtGreaterThanEqualAndCreatedAtLessThan(
                         vehicle,
                         currentUser,
                         start,
                         end
                 )
                 .orElse(null);
+
+
+        System.out.println("Returned order: " +
+                (order != null ? order.getCreatedAt() : "NO ORDER FOUND"));
+
+        System.out.println("================================");
 
         if (order == null) {
             return null;
@@ -695,9 +706,11 @@ public class OrderService {
             LocalDate endDate
     ) {
 
+
+
         LocalDateTime start = startDate.atStartOfDay();
 
-        LocalDateTime end = endDate.plusDays(1).atStartOfDay();
+        LocalDateTime end = endDate.atTime(23,59,59);
 
         List<OrderDetails> orders =
                 orderRepo.findByCreatedAtBetween(start, end);
@@ -785,7 +798,7 @@ public class OrderService {
 
 
         LocalDateTime start = startDate.atStartOfDay();
-        LocalDateTime end = endDate.plusDays(1).atStartOfDay();
+        LocalDateTime end = endDate.atTime(23,59,59);
 
         List <Long> vehicleIds = List.of(16L, 17L, 18L, 19L, 20L );
 
