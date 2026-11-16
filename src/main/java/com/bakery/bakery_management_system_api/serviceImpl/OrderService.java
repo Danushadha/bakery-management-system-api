@@ -185,11 +185,11 @@ public class OrderService {
                             new RuntimeException(
                                     "Item not found or inactive"));
 
-            // Validate quantity
-            if (itemReqDto.getQty() <= 0) {
-                throw new RuntimeException(
-                        "Item quantity must be greater than zero");
-            }
+            // Validate quantity (later this has requested to allow zero items to appear)
+//            if (itemReqDto.getQty() <= 0) {
+//                throw new RuntimeException(
+//                        "Item quantity must be greater than zero");
+//            }
 
             OrderedItems orderedItems = new OrderedItems();
 
@@ -390,11 +390,11 @@ public class OrderService {
                             new RuntimeException(
                                     "Item not found or inactive"));
 
-            // Validate quantity
-            if (itemReqDto.getQty() <= 0) {
-                throw new RuntimeException(
-                        "Item quantity must be greater than zero");
-            }
+            // Validate quantity (later this has requested to allow zero items to appear)
+//            if (itemReqDto.getQty() <= 0) {
+//                throw new RuntimeException(
+//                        "Item quantity must be greater than zero");
+//            }
 
             OrderedItems orderedItems = new OrderedItems();
 
