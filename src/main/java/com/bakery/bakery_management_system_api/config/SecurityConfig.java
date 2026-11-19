@@ -75,7 +75,9 @@ public class SecurityConfig {
 
         configuration.setAllowedOrigins(
                 List.of("http://localhost:5173",
-                        "https://bakery-management-system-ui.vercel.app")
+                        "https://bakery-management-system-ui.vercel.app",
+                        "https://nethubakehouse.lk",
+                        "https://www.nethubakehouse.lk")
         );
 
         configuration.setAllowedMethods(
